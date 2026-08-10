@@ -136,7 +136,7 @@ footer{padding:60px 0 80px;color:var(--dim);font:10px "JetBrains Mono";display:f
 .arch-inspector{display:grid;grid-template-columns:1.05fr .95fr;gap:10px;margin-top:14px}
 .code-panel,.runtime-panel{min-height:235px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.18);overflow:hidden}
 .mini-bar{display:flex;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--line);color:var(--dim);font:10px "JetBrains Mono"}
-.live-dot{color:var(--green)}
+.mini-bar .live-dot{display:inline-block;width:auto;height:auto;border-radius:0;background:none;box-shadow:none;color:var(--green);white-space:nowrap;flex:0 0 auto}
 .code-panel pre{margin:0;padding:22px;color:#cbd5e1;font:12px/2 "JetBrains Mono";white-space:pre-wrap}
 .runtime-panel{padding-bottom:15px}.runtime-panel #stageText{padding:22px}
 .runtime-panel strong{font:600 16px Inter}.runtime-panel p{color:var(--muted);font:12px/1.7;margin:9px 0 0}
@@ -174,9 +174,6 @@ footer{padding:60px 0 80px;color:var(--dim);font:10px "JetBrains Mono";display:f
 @media(max-width:600px){.core-msg{max-width:92%}.core-chat{height:280px}.core-signal{display:none}.core-input{margin-left:12px;margin-right:12px}.core-head{padding:15px}.core-foot{padding-left:15px;padding-right:15px}}
 
 
-.avatar-core{overflow:hidden;padding:0;isolation:isolate}
-.avatar-core img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.08) contrast(1.04);transform:scale(1.02)}
-.avatar-core:after{content:"";position:absolute;inset:0;border-radius:42px;background:linear-gradient(145deg,rgba(100,246,255,.13),transparent 42%,rgba(167,139,250,.12));mix-blend-mode:screen;pointer-events:none}
 .core-shell.ai-ready{box-shadow:var(--shadow),0 0 80px rgba(100,246,255,.07)}
 .core-signal.busy{color:#f5c76b}.core-signal.busy i{background:#f5c76b;box-shadow:0 0 10px #f5c76b}
 .core-msg .code{font-family:"JetBrains Mono";white-space:pre-wrap}
@@ -856,9 +853,9 @@ IP 06  CALL print`,
   }
 
   // NEWINCE CORE — general AI gateway + local fallback.
-  // Set window.NEWINCE_AI_ENDPOINT to your server endpoint (e.g. /api/chat).
+  // Wired to the user's own Cloudflare Worker endpoint.
   // The browser should NEVER contain an OpenAI/Anthropic/Gemini secret key.
-  window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || '/api/chat';
+  window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || 'https://newince-ai.egar3864.workers.dev/';
 
   const coreInput=document.getElementById('coreInput'), coreSend=document.getElementById('coreSend');
   const coreChat=document.getElementById('coreChat'), coreMode=document.getElementById('coreMode');
@@ -902,13 +899,23 @@ IP 06  CALL print`,
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           message:q,
+          prompt:q,
           history:coreHistory.slice(-12),
+          messages:[
+            ...coreHistory.slice(-12).map(m=>({role:m.role,content:m.content})),
+            {role:'user',content:q}
+          ],
           system:'You are NEWINCE CORE, a helpful general-purpose AI assistant embedded in a developer portfolio. Answer naturally in the user language. You may discuss programming, science, math, writing, ideas, and the site owner projects. Be concise unless asked for detail. Never claim to have access to private files unless provided in chat.'
         })
       });
-      if(!r.ok) throw new Error('AI gateway unavailable');
+      if(!r.ok) throw new Error('AI gateway unavailable: '+r.status);
       const data=await r.json();
-      const answer=data.reply||data.message||data.content;
+      const answer =
+        data.reply ?? data.message ?? data.content ?? data.response ?? data.text ??
+        data.result ??
+        data.choices?.[0]?.message?.content ??
+        data.choices?.[0]?.text ??
+        (typeof data==='string' ? data : null);
       if(!answer) throw new Error('empty response');
       thinking.remove(); coreSay(String(answer)); coreHistory.push({role:'assistant',content:String(answer)});
       if(coreMode) coreMode.textContent='live AI gateway';
@@ -934,8 +941,10 @@ IP 06  CALL print`,
 
 <!--
   GENERAL AI:
-  Frontend calls POST /api/chat. Put the real model/API key on your server, never in this HTML.
-  Expected response: {"reply":"..."}.
+  Frontend calls POST https://newince-ai.egar3864.workers.dev/ (see window.NEWINCE_AI_ENDPOINT).
+  Keep the real model/API key on the Worker side, never in this HTML.
+  Accepted response shapes: {"reply":"..."} | {"message":"..."} | {"content":"..."} |
+  {"response":"..."} | {"text":"..."} | {"result":"..."} | OpenAI-style {"choices":[{"message":{"content":"..."}}]}.
 -->
 
 </body>
