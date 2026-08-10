@@ -174,6 +174,9 @@ footer{padding:60px 0 80px;color:var(--dim);font:10px "JetBrains Mono";display:f
 @media(max-width:600px){.core-msg{max-width:92%}.core-chat{height:280px}.core-signal{display:none}.core-input{margin-left:12px;margin-right:12px}.core-head{padding:15px}.core-foot{padding-left:15px;padding-right:15px}}
 
 
+.avatar-core{overflow:hidden;padding:0;isolation:isolate}
+.avatar-core img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.08) contrast(1.04);transform:scale(1.02)}
+.avatar-core:after{content:"";position:absolute;inset:0;border-radius:42px;background:linear-gradient(145deg,rgba(100,246,255,.13),transparent 42%,rgba(167,139,250,.12));mix-blend-mode:screen;pointer-events:none}
 .core-shell.ai-ready{box-shadow:var(--shadow),0 0 80px rgba(100,246,255,.07)}
 .core-signal.busy{color:#f5c76b}.core-signal.busy i{background:#f5c76b;box-shadow:0 0 10px #f5c76b}
 .core-msg .code{font-family:"JetBrains Mono";white-space:pre-wrap}
@@ -853,7 +856,7 @@ IP 06  CALL print`,
   }
 
   // NEWINCE CORE — general AI gateway + local fallback.
-  // Wired to the user's own Cloudflare Worker endpoint.
+  // Set window.NEWINCE_AI_ENDPOINT to your server endpoint (e.g. /api/chat).
   // The browser should NEVER contain an OpenAI/Anthropic/Gemini secret key.
   window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || 'https://newince-ai.egar3864.workers.dev/';
 
@@ -899,23 +902,13 @@ IP 06  CALL print`,
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           message:q,
-          prompt:q,
           history:coreHistory.slice(-12),
-          messages:[
-            ...coreHistory.slice(-12).map(m=>({role:m.role,content:m.content})),
-            {role:'user',content:q}
-          ],
           system:'You are NEWINCE CORE, a helpful general-purpose AI assistant embedded in a developer portfolio. Answer naturally in the user language. You may discuss programming, science, math, writing, ideas, and the site owner projects. Be concise unless asked for detail. Never claim to have access to private files unless provided in chat.'
         })
       });
-      if(!r.ok) throw new Error('AI gateway unavailable: '+r.status);
+      if(!r.ok) throw new Error('AI gateway unavailable');
       const data=await r.json();
-      const answer =
-        data.reply ?? data.message ?? data.content ?? data.response ?? data.text ??
-        data.result ??
-        data.choices?.[0]?.message?.content ??
-        data.choices?.[0]?.text ??
-        (typeof data==='string' ? data : null);
+      const answer=data.reply||data.message||data.content;
       if(!answer) throw new Error('empty response');
       thinking.remove(); coreSay(String(answer)); coreHistory.push({role:'assistant',content:String(answer)});
       if(coreMode) coreMode.textContent='live AI gateway';
@@ -941,11 +934,47 @@ IP 06  CALL print`,
 
 <!--
   GENERAL AI:
-  Frontend calls POST https://newince-ai.egar3864.workers.dev/ (see window.NEWINCE_AI_ENDPOINT).
-  Keep the real model/API key on the Worker side, never in this HTML.
-  Accepted response shapes: {"reply":"..."} | {"message":"..."} | {"content":"..."} |
-  {"response":"..."} | {"text":"..."} | {"result":"..."} | OpenAI-style {"choices":[{"message":{"content":"..."}}]}.
+  Frontend calls POST /api/chat. Put the real model/API key on your server, never in this HTML.
+  Expected response: {"reply":"..."}.
 -->
+
+
+<!-- NEWINCE CORE enhancements -->
+<style>
+.ai-thinking{display:inline-flex;gap:4px;align-items:center;font-size:.85em;opacity:.8}
+.ai-thinking i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:aiDot 1s infinite}
+.ai-thinking i:nth-child(2){animation-delay:.15s}.ai-thinking i:nth-child(3){animation-delay:.3s}
+@keyframes aiDot{50%{transform:translateY(-4px);opacity:.35}}
+.ai-cursor{display:inline-block;width:8px;animation:blink .8s infinite}
+@keyframes blink{50%{opacity:0}}
+</style>
+<script>
+window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || "https://newince-ai.egar3864.workers.dev/";
+
+window.newinceTypeText = async function(el, text){
+  el.innerHTML="";
+  for(let c of text){
+    el.innerHTML += c;
+    await new Promise(r=>setTimeout(r,18));
+  }
+  el.innerHTML += '<span class="ai-cursor">▌</span>';
+};
+
+window.NEWINCE_LIMIT = {
+  max: 10,
+  key: "newince_daily_requests"
+};
+
+window.newinceCanRequest = function(){
+  let d=JSON.parse(localStorage.getItem(window.NEWINCE_LIMIT.key)||'{"day":"","count":0}');
+  let day=new Date().toISOString().slice(0,10);
+  if(d.day!==day){d={day,count:0}}
+  if(d.count>=window.NEWINCE_LIMIT.max)return false;
+  d.count++;
+  localStorage.setItem(window.NEWINCE_LIMIT.key,JSON.stringify(d));
+  return true;
+};
+</script>
 
 </body>
 </html>
