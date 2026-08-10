@@ -892,31 +892,79 @@ IP 06  CALL print`,
     coreSignal.querySelector('i').style.animation=v?'pulse .7s infinite':'';
   }
   async function askCore(){
-    const q=coreInput.value.trim(); if(!q)return;
-    coreInput.value=''; coreSay(q,'user'); coreHistory.push({role:'user',content:q}); setBusy(true);
-    const thinking=document.createElement('div'); thinking.className='core-msg bot';
-    thinking.innerHTML='<span class="msg-label">CORE</span><div>thinking ···</div>'; coreChat.appendChild(thinking);
+    const q=coreInput.value.trim();
+    if(!q) return;
+
+    // Local budget protection: max 10 requests per day on this browser.
+    if(typeof window.newinceCanRequest === 'function' && !window.newinceCanRequest()){
+      coreInput.value='';
+      coreSay('Лимит запросов на сегодня исчерпан. Попробуйте завтра.','bot');
+      if(coreMode) coreMode.textContent='daily limit reached';
+      return;
+    }
+
+    coreInput.value='';
+    coreSay(q,'user');
+    coreHistory.push({role:'user',content:q});
+    setBusy(true);
+
+    const thinking=document.createElement('div');
+    thinking.className='core-msg bot';
+    thinking.innerHTML='<span class="msg-label">CORE</span><div class="ai-thinking">thinking <i></i><i></i><i></i></div>';
+    coreChat.appendChild(thinking);
     coreChat.scrollTop=coreChat.scrollHeight;
+
     try{
       const r=await fetch(window.NEWINCE_AI_ENDPOINT,{
-        method:'POST',headers:{'Content-Type':'application/json'},
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           message:q,
           history:coreHistory.slice(-12),
           system:'You are NEWINCE CORE, a helpful general-purpose AI assistant embedded in a developer portfolio. Answer naturally in the user language. You may discuss programming, science, math, writing, ideas, and the site owner projects. Be concise unless asked for detail. Never claim to have access to private files unless provided in chat.'
         })
       });
-      if(!r.ok) throw new Error('AI gateway unavailable');
+
+      if(!r.ok){
+        let detail='';
+        try{ detail=await r.text(); }catch(_){}
+        throw new Error('AI gateway unavailable ('+r.status+') '+detail.slice(0,160));
+      }
+
       const data=await r.json();
-      const answer=data.reply||data.message||data.content;
+      // Cloudflare Worker returns { answer: "..." }.
+      // Keep the other names for compatibility with older backends.
+      const answer=data.answer||data.reply||data.message||data.content;
       if(!answer) throw new Error('empty response');
-      thinking.remove(); coreSay(String(answer)); coreHistory.push({role:'assistant',content:String(answer)});
+
+      thinking.remove();
+      const wrap=document.createElement('div');
+      wrap.className='core-msg bot';
+      const label=document.createElement('span');
+      label.className='msg-label';
+      label.textContent='CORE';
+      const box=document.createElement('div');
+      wrap.append(label,box);
+      coreChat.appendChild(wrap);
+      coreChat.scrollTop=coreChat.scrollHeight;
+
+      if(typeof window.newinceTypeText === 'function'){
+        await window.newinceTypeText(box,String(answer));
+      }else{
+        box.textContent=String(answer);
+      }
+
+      coreHistory.push({role:'assistant',content:String(answer)});
       if(coreMode) coreMode.textContent='live AI gateway';
       coreShell?.classList.add('ai-ready');
     }catch(e){
-      thinking.remove(); coreSay(fallbackAnswer(q));
+      console.error('NEWINCE CORE:',e);
+      thinking.remove();
+      coreSay(fallbackAnswer(q));
       if(coreMode) coreMode.textContent='fallback / gateway offline';
-    }finally{setBusy(false)}
+    }finally{
+      setBusy(false);
+    }
   }
   coreSend?.addEventListener('click',askCore);
   coreInput?.addEventListener('keydown',e=>{if(e.key==='Enter')askCore()});
