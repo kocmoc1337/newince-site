@@ -139,6 +139,12 @@ footer{padding:60px 0 80px;color:var(--dim);font:10px "JetBrains Mono";display:f
 .mini-bar{display:flex;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--line);color:var(--dim);font:10px "JetBrains Mono"}
 .mini-bar .live-dot{display:inline-block;width:auto;height:auto;border-radius:0;background:none;box-shadow:none;color:var(--green);white-space:nowrap;flex:0 0 auto}
 .code-panel pre{margin:0;padding:22px;color:#cbd5e1;font:12px/2 "JetBrains Mono";white-space:pre-wrap}
+.code-panel textarea#stageCode{display:block;width:100%;min-height:190px;margin:0;padding:22px;color:#cbd5e1;font:12px/2 "JetBrains Mono";white-space:pre;background:transparent;border:none;outline:none;resize:vertical;box-sizing:border-box}
+.code-panel textarea#stageCode.readonly{white-space:pre-wrap;resize:none;opacity:.9;cursor:default}
+.code-panel textarea#stageCode:not(.readonly):focus{background:rgba(100,246,255,.03)}
+.golite-run-btn{font:600 10px "JetBrains Mono";letter-spacing:.04em;color:var(--cyan);background:rgba(100,246,255,.08);border:1px solid rgba(100,246,255,.25);border-radius:999px;padding:4px 12px;cursor:pointer;transition:.2s}
+.golite-run-btn:hover{background:rgba(100,246,255,.16);transform:translateY(-1px)}
+.golite-run-btn:active{transform:translateY(0)}
 .runtime-panel{padding-bottom:15px}.runtime-panel #stageText{padding:22px}
 .runtime-panel strong{font:600 16px Inter}.runtime-panel p{color:var(--muted);font:12px/1.7;margin:9px 0 0}
 .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 15px}
@@ -361,6 +367,7 @@ body.light .termbar{background:rgba(16,28,43,.035)}
 body.light .termout{color:#243247}
 body.light .code-panel,body.light .runtime-panel{background:rgba(255,255,255,.60)}
 body.light .code-panel pre{color:#1f2b3d}
+body.light .code-panel textarea#stageCode{color:#1f2b3d}
 body.light .runtime-panel strong{color:#101827}
 body.light .pipe b{color:#101827}
 body.light .prompt{color:#078da3}
@@ -485,10 +492,10 @@ body.light .avatar-core img{background:#fff}
 
     <div class="arch-inspector">
       <div class="code-panel">
-        <div class="mini-bar"><span>example.golite</span><span id="stageBadge">SOURCE</span></div>
-        <pre id="stageCode">let x = 10
+        <div class="mini-bar"><span>example.golite</span><button id="golite-run" class="golite-run-btn" type="button">▸ run</button><span id="stageBadge">SOURCE</span></div>
+        <textarea id="stageCode" spellcheck="false" autocomplete="off" autocapitalize="off">let x = 10
 let y = x + 2
-print(y)</pre>
+print(y)</textarea>
       </div>
       <div class="runtime-panel">
         <div class="mini-bar"><span>runtime.inspect</span><span class="live-dot">● live</span></div>
@@ -749,77 +756,252 @@ newince — developer / builder of GoLite</div>
   document.querySelectorAll('.reveal').forEach(x=>io.observe(x));
 
 
-  // GoLite architecture inspector
-  const stages = {
-    source: {
-      badge:'SOURCE',
-      code:`let x = 10
-let y = x + 2
-print(y)`,
-      title:'Raw source',
-      text:'Исходный код — обычный текст. Следующий шаг: lexer разбивает его на токены.',
-      a:'3', b:'31', c:'input'
-    },
-    lexer: {
-      badge:'TOKENS',
-      code:`LET  IDENT(x)  =  NUMBER(10)
-LET  IDENT(y)  =  IDENT(x) + NUMBER(2)
-IDENT(print) ( IDENT(y) )`,
-      title:'Lexer',
-      text:'Lexer превращает символы в последовательность токенов, с которой уже удобно работать parser.',
-      a:'14', b:'tokens', c:'ready'
-    },
-    ast: {
-      badge:'AST',
-      code:`Program
-├─ Let x
-│  └─ Number(10)
-├─ Let y
-│  └─ Add(x, 2)
-└─ Call print
-   └─ y`,
-      title:'Parser → AST',
-      text:'Parser понимает структуру программы и строит AST. В GoLite AST также является основой для макросов.',
-      a:'5', b:'nodes', c:'ready'
-    },
-    bytecode: {
-      badge:'BYTECODE',
-      code:`LOAD_CONST 10
-STORE_NAME  x
-LOAD_NAME   x
-LOAD_CONST  2
-BINOP       ADD
-STORE_NAME  y
-LOAD_NAME   y
-CALL        print 1`,
-      title:'Custom bytecode',
-      text:'Компилятор превращает AST в плоский набор инструкций. Горячий путь выполняется собственной VM.',
-      a:'8', b:'ops', c:'compiled'
-    },
-    vm: {
-      badge:'VM',
-      code:`IP 00  LOAD_CONST 10
-IP 01  STORE_NAME x
-IP 02  LOAD_NAME x
-IP 03  LOAD_CONST 2
-IP 04  BINOP ADD
-IP 05  STORE_NAME y
-IP 06  CALL print`,
-      title:'Virtual machine',
-      text:'VM идёт по инструкциям через program counter и стек. Результат программы: 12.',
-      a:'07', b:'steps', c:'12 → out'
+  // ================= GoLite: real tokenizer -> parser -> AST -> bytecode -> VM =================
+  function goliteTokenize(src){
+    const toks=[]; let i=0; const n=src.length;
+    const isDigit=c=>c>='0'&&c<='9';
+    const isIdentStart=c=>/[A-Za-z_]/.test(c);
+    const isIdent=c=>/[A-Za-z0-9_]/.test(c);
+    while(i<n){
+      const c=src[i];
+      if(c===' '||c==='\t'||c==='\r'){i++;continue}
+      if(c==='\n'){toks.push({t:'NL',v:'\\n'});i++;continue}
+      if(isDigit(c)){let j=i;while(j<n&&(isDigit(src[j])||src[j]==='.'))j++;toks.push({t:'NUMBER',v:src.slice(i,j)});i=j;continue}
+      if(c==='"'||c==="'"){const q=c;let j=i+1;while(j<n&&src[j]!==q)j++;toks.push({t:'STRING',v:src.slice(i+1,j)});i=j+1;continue}
+      if(isIdentStart(c)){let j=i;while(j<n&&isIdent(src[j]))j++;const w=src.slice(i,j);
+        toks.push({t:w==='let'?'LET':'IDENT',v:w});i=j;continue}
+      if(c==='+'){toks.push({t:'PLUS',v:'+'});i++;continue}
+      if(c==='-'){toks.push({t:'MINUS',v:'-'});i++;continue}
+      if(c==='*'){toks.push({t:'STAR',v:'*'});i++;continue}
+      if(c==='/'){toks.push({t:'SLASH',v:'/'});i++;continue}
+      if(c==='='){toks.push({t:'EQ',v:'='});i++;continue}
+      if(c==='('){toks.push({t:'LPAREN',v:'('});i++;continue}
+      if(c===')'){toks.push({t:'RPAREN',v:')'});i++;continue}
+      if(c===','){toks.push({t:'COMMA',v:','});i++;continue}
+      i++; // skip unknown char rather than crash
     }
-  };
+    toks.push({t:'EOF',v:''});
+    return toks;
+  }
+
+  function goliteParse(toks){
+    let p=0;
+    const peek=()=>toks[p];
+    const next=()=>toks[p++];
+    const skipNL=()=>{while(peek().t==='NL')p++};
+    function parseProgram(){
+      const stmts=[]; skipNL();
+      while(peek().t!=='EOF'){ stmts.push(parseStmt()); skipNL(); }
+      return {type:'Program',body:stmts};
+    }
+    function parseStmt(){
+      if(peek().t==='LET'){
+        next();
+        const name=next().v;
+        if(peek().t==='EQ') next();
+        const value=parseExpr();
+        return {type:'Let',name,value};
+      }
+      return {type:'ExprStmt',expr:parseExpr()};
+    }
+    function parseExpr(){
+      let left=parseTerm();
+      while(peek().t==='PLUS'||peek().t==='MINUS'){
+        const op=next().t==='PLUS'?'+':'-';
+        left={type:'BinOp',op,left,right:parseTerm()};
+      }
+      return left;
+    }
+    function parseTerm(){
+      let left=parseFactor();
+      while(peek().t==='STAR'||peek().t==='SLASH'){
+        const op=next().t==='STAR'?'*':'/';
+        left={type:'BinOp',op,left,right:parseFactor()};
+      }
+      return left;
+    }
+    function parseFactor(){
+      const tk=peek();
+      if(tk.t==='NUMBER'){next();return {type:'Number',value:parseFloat(tk.v)}}
+      if(tk.t==='STRING'){next();return {type:'String',value:tk.v}}
+      if(tk.t==='LPAREN'){next();const e=parseExpr();if(peek().t==='RPAREN')next();return e}
+      if(tk.t==='IDENT'){
+        next();
+        if(peek().t==='LPAREN'){
+          next();
+          const args=[];
+          if(peek().t!=='RPAREN'){
+            args.push(parseExpr());
+            while(peek().t==='COMMA'){next();args.push(parseExpr())}
+          }
+          if(peek().t==='RPAREN')next();
+          return {type:'Call',callee:tk.v,args};
+        }
+        return {type:'Ident',name:tk.v};
+      }
+      next();
+      return {type:'Number',value:0};
+    }
+    return parseProgram();
+  }
+
+  function goliteAstPrint(ast){
+    const lines=[];
+    ast.body.forEach((stmt,idx)=>{
+      const last=idx===ast.body.length-1;
+      const pre=last?'└─ ':'├─ ';
+      const childPre=last?'   ':'│  ';
+      if(stmt.type==='Let'){
+        lines.push(pre+'Let '+stmt.name);
+        lines.push(childPre+'└─ '+exprLabel(stmt.value));
+      }else{
+        lines.push(pre+exprLabel(stmt.expr));
+      }
+    });
+    return lines.join('\n');
+    function exprLabel(e){
+      if(e.type==='Number')return 'Number('+e.value+')';
+      if(e.type==='String')return 'String("'+e.value+'")';
+      if(e.type==='Ident')return e.name;
+      if(e.type==='BinOp')return {'+':'Add','-':'Sub','*':'Mul','/':'Div'}[e.op]+'('+exprLabel(e.left)+', '+exprLabel(e.right)+')';
+      if(e.type==='Call')return 'Call '+e.callee+(e.args.length?'('+e.args.map(exprLabel).join(', ')+')':'');
+      return '?';
+    }
+  }
+
+  function goliteCompile(ast){
+    const code=[];
+    function emit(op,arg){code.push(arg===undefined?{op}:{op,arg})}
+    function compileExpr(e){
+      if(e.type==='Number'){emit('LOAD_CONST',e.value);return}
+      if(e.type==='String'){emit('LOAD_CONST','"'+e.value+'"');return}
+      if(e.type==='Ident'){emit('LOAD_NAME',e.name);return}
+      if(e.type==='BinOp'){
+        compileExpr(e.left);compileExpr(e.right);
+        emit('BINOP',{'+':'ADD','-':'SUB','*':'MUL','/':'DIV'}[e.op]);
+        return;
+      }
+      if(e.type==='Call'){
+        e.args.forEach(compileExpr);
+        emit('CALL',e.callee+' '+e.args.length);
+        return;
+      }
+    }
+    ast.body.forEach(stmt=>{
+      if(stmt.type==='Let'){compileExpr(stmt.value);emit('STORE_NAME',stmt.name)}
+      else{compileExpr(stmt.expr)}
+    });
+    return code;
+  }
+
+  function goliteRunVM(code){
+    const stack=[]; const names={}; const trace=[]; const output=[];
+    code.forEach((ins,ip)=>{
+      const label='IP '+String(ip).padStart(2,'0')+'  '+ins.op+(ins.arg!==undefined?' '+ins.arg:'');
+      trace.push(label);
+      if(ins.op==='LOAD_CONST'){
+        let v=ins.arg;
+        if(typeof v==='string'&&v.startsWith('"'))v=v.slice(1,-1);
+        stack.push(v);
+      }else if(ins.op==='LOAD_NAME'){
+        stack.push(names[ins.arg]);
+      }else if(ins.op==='STORE_NAME'){
+        names[ins.arg]=stack.pop();
+      }else if(ins.op==='BINOP'){
+        const b=stack.pop(),a=stack.pop();
+        let r;
+        if(ins.arg==='ADD')r=a+b; else if(ins.arg==='SUB')r=a-b;
+        else if(ins.arg==='MUL')r=a*b; else r=a/b;
+        stack.push(r);
+      }else if(ins.op==='CALL'){
+        const [fn,argcStr]=ins.arg.split(' ');
+        const argc=parseInt(argcStr,10);
+        const args=[]; for(let k=0;k<argc;k++)args.unshift(stack.pop());
+        if(fn==='print'){ output.push(args.map(String).join(' ')); stack.push(undefined); }
+        else { stack.push(undefined); }
+      }
+    });
+    return {trace,output,steps:code.length};
+  }
+
+  function computeStages(src){
+    let tokens=[],ast={body:[]},bytecode=[],vmResult={trace:[],output:[],steps:0},error=null;
+    try{
+      tokens=goliteTokenize(src);
+      ast=goliteParse(tokens);
+      bytecode=goliteCompile(ast);
+      vmResult=goliteRunVM(bytecode);
+    }catch(e){ error=e.message||String(e); }
+
+    const realTokens=tokens.filter(t=>t.t!=='NL'&&t.t!=='EOF');
+    const tokenLine=realTokens.map(t=>{
+      if(t.t==='NUMBER')return 'NUMBER('+t.v+')';
+      if(t.t==='STRING')return 'STRING("'+t.v+'")';
+      if(t.t==='IDENT')return 'IDENT('+t.v+')';
+      if(t.t==='LET')return 'LET';
+      return t.v;
+    }).join('  ');
+
+    const bytecodeText=bytecode.map(ins=>ins.op.padEnd(11,' ')+(ins.arg!==undefined?ins.arg:'')).join('\n')||'(пусто)';
+    const vmText=vmResult.trace.join('\n')||'(нечего исполнять)';
+    const outText=vmResult.output.length?vmResult.output.join('\n'):'(нет вывода — используй print(...))';
+    const lines=src.split('\n').length;
+
+    return {
+      source:{
+        badge:'SOURCE', code:src, title:'Raw source',
+        text: error?('Ошибка: '+error):'Исходный код — обычный текст. Следующий шаг: lexer разбивает его на токены.',
+        a:String(lines), b:String(src.length), c: error?'error':'input'
+      },
+      lexer:{
+        badge:'TOKENS', code: error?('// ошибка при токенизации'):(tokenLine||'(пусто)'), title:'Lexer',
+        text:'Lexer превращает символы в последовательность токенов, с которой уже удобно работать parser.',
+        a:String(realTokens.length), b:'tokens', c: error?'error':'ready'
+      },
+      ast:{
+        badge:'AST', code: error?('// ошибка парсинга: '+error):(goliteAstPrint(ast)||'Program\n(пусто)'), title:'Parser → AST',
+        text:'Parser понимает структуру программы и строит AST. В GoLite AST также является основой для макросов.',
+        a:String(ast.body.length), b:'nodes', c: error?'error':'ready'
+      },
+      bytecode:{
+        badge:'BYTECODE', code: bytecodeText, title:'Custom bytecode',
+        text:'Компилятор превращает AST в плоский набор инструкций. Горячий путь выполняется собственной VM.',
+        a:String(bytecode.length), b:'ops', c: error?'error':'compiled'
+      },
+      vm:{
+        badge:'VM', code: vmText, title:'Virtual machine',
+        text:'VM идёт по инструкциям через program counter и стек. Вывод программы:\n'+outText,
+        a:String(vmResult.steps).padStart(2,'0'), b:'steps', c: error?'error':(vmResult.output.length?vmResult.output.join(', '):'no output')
+      }
+    };
+  }
+
+  let stages = computeStages(document.getElementById('stageCode').value);
+  function renderActiveStage(){
+    const btn=document.querySelector('#pipeline .pipe.active')||document.querySelector('#pipeline .pipe');
+    const s=stages[btn.dataset.stage];
+    document.getElementById('stageBadge').textContent=s.badge;
+    const codeEl=document.getElementById('stageCode');
+    if(btn.dataset.stage==='source'){codeEl.readOnly=false;codeEl.classList.remove('readonly')}
+    else{codeEl.readOnly=true;codeEl.classList.add('readonly');codeEl.value=s.code}
+    document.getElementById('stageText').innerHTML='<strong>'+s.title+'</strong><p>'+s.text.replace(/\n/g,'<br>')+'</p>';
+    document.getElementById('metricA').textContent=s.a;
+    document.getElementById('metricB').textContent=s.b;
+    document.getElementById('metricC').textContent=s.c;
+  }
+  const goliteRunBtn=document.getElementById('golite-run');
+  if(goliteRunBtn){
+    goliteRunBtn.addEventListener('click',()=>{
+      stages=computeStages(document.getElementById('stageCode').value);
+      renderActiveStage();
+    });
+  }
+  renderActiveStage();
+
   document.querySelectorAll('#pipeline .pipe').forEach(btn=>{
     btn.addEventListener('click',()=>{
-      const s=stages[btn.dataset.stage];
       document.querySelectorAll('#pipeline .pipe').forEach(x=>x.classList.toggle('active',x===btn));
-      document.getElementById('stageBadge').textContent=s.badge;
-      document.getElementById('stageCode').textContent=s.code;
-      document.getElementById('stageText').innerHTML='<strong>'+s.title+'</strong><p>'+s.text+'</p>';
-      document.getElementById('metricA').textContent=s.a;
-      document.getElementById('metricB').textContent=s.b;
-      document.getElementById('metricC').textContent=s.c;
+      renderActiveStage();
     });
   });
 
