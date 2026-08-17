@@ -11,6 +11,7 @@
 <meta property="og:title" content="newince — developer / builder">
 <meta property="og:description" content="newince — developer portfolio, GoLite, systems, experiments and NEWINCE CORE.">
 <meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070c'/%3E%3Ctext x='50' y='68' font-size='58' font-family='monospace' fill='%2364f6ff' text-anchor='middle'%3E%3E_%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -174,9 +175,6 @@ footer{padding:60px 0 80px;color:var(--dim);font:10px "JetBrains Mono";display:f
 @media(max-width:600px){.core-msg{max-width:92%}.core-chat{height:280px}.core-signal{display:none}.core-input{margin-left:12px;margin-right:12px}.core-head{padding:15px}.core-foot{padding-left:15px;padding-right:15px}}
 
 
-.avatar-core{overflow:hidden;padding:0;isolation:isolate}
-.avatar-core img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.08) contrast(1.04);transform:scale(1.02)}
-.avatar-core:after{content:"";position:absolute;inset:0;border-radius:42px;background:linear-gradient(145deg,rgba(100,246,255,.13),transparent 42%,rgba(167,139,250,.12));mix-blend-mode:screen;pointer-events:none}
 .core-shell.ai-ready{box-shadow:var(--shadow),0 0 80px rgba(100,246,255,.07)}
 .core-signal.busy{color:#f5c76b}.core-signal.busy i{background:#f5c76b;box-shadow:0 0 10px #f5c76b}
 .core-msg .code{font-family:"JetBrains Mono";white-space:pre-wrap}
@@ -380,6 +378,19 @@ body.light .avatar-core img{background:#fff}
 
 </head>
 <body>
+<script>
+  // Анти-FOUC: применяем сохранённую тему ДО первой отрисовки, чтобы не было
+  // вспышки тёмной темы при заходе с сохранённой светлой.
+  (function(){
+    try{
+      if(localStorage.getItem('newince-theme-version')==='v11' && localStorage.getItem('newince-theme')==='light'){
+        document.body.classList.add('light');
+        var m=document.querySelector('meta[name="theme-color"]');
+        if(m) m.content='#eef3f7';
+      }
+    }catch(e){}
+  })();
+</script>
 
 <div class="system-reboot" id="systemReboot" aria-hidden="true">
   <div class="reboot-box">
@@ -856,8 +867,9 @@ IP 06  CALL print`,
   }
 
   // NEWINCE CORE — general AI gateway + local fallback.
-  // Set window.NEWINCE_AI_ENDPOINT to your server endpoint (e.g. /api/chat).
-  // The browser should NEVER contain an OpenAI/Anthropic/Gemini secret key.
+  // Wired to the Cloudflare Worker (newince-ai.egar3864.workers.dev).
+  // The browser should NEVER contain an OpenAI/Anthropic/Gemini secret key —
+  // that lives server-side in the Worker's environment variables.
   window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || 'https://newince-ai.egar3864.workers.dev/';
 
   const coreInput=document.getElementById('coreInput'), coreSend=document.getElementById('coreSend');
@@ -920,7 +932,12 @@ IP 06  CALL print`,
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           message:q,
+          prompt:q,
           history:coreHistory.slice(-12),
+          messages:[
+            ...coreHistory.slice(-12).map(m=>({role:m.role,content:m.content})),
+            {role:'user',content:q}
+          ],
           system:'You are NEWINCE CORE, a helpful general-purpose AI assistant embedded in a developer portfolio. Answer naturally in the user language. You may discuss programming, science, math, writing, ideas, and the site owner projects. Be concise unless asked for detail. Never claim to have access to private files unless provided in chat.'
         })
       });
@@ -932,9 +949,13 @@ IP 06  CALL print`,
       }
 
       const data=await r.json();
-      // Cloudflare Worker returns { answer: "..." }.
-      // Keep the other names for compatibility with older backends.
-      const answer=data.answer||data.reply||data.message||data.content;
+      // Accept whatever shape the Worker actually returns.
+      const answer =
+        data.answer ?? data.reply ?? data.message ?? data.content ?? data.response ?? data.text ??
+        data.result ??
+        data.choices?.[0]?.message?.content ??
+        data.choices?.[0]?.text ??
+        (typeof data==='string' ? data : null);
       if(!answer) throw new Error('empty response');
 
       thinking.remove();
@@ -982,8 +1003,10 @@ IP 06  CALL print`,
 
 <!--
   GENERAL AI:
-  Frontend calls POST /api/chat. Put the real model/API key on your server, never in this HTML.
-  Expected response: {"reply":"..."}.
+  Frontend calls POST https://newince-ai.egar3864.workers.dev/ (see window.NEWINCE_AI_ENDPOINT
+  set earlier in this file). Keep the real model/API key on the Worker side, never in this HTML.
+  Accepted response shapes: {"reply"|"answer"|"message"|"content":"..."} or OpenAI-style
+  {"choices":[{"message":{"content":"..."}}]}.
 -->
 
 
@@ -997,7 +1020,6 @@ IP 06  CALL print`,
 @keyframes blink{50%{opacity:0}}
 </style>
 <script>
-window.NEWINCE_AI_ENDPOINT = window.NEWINCE_AI_ENDPOINT || "https://newince-ai.egar3864.workers.dev/";
 
 window.newinceTypeText = async function(el, text){
   el.innerHTML="";
