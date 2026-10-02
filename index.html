@@ -287,6 +287,22 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 .qrc span{display:block;margin-top:8px;font-size:13px;font-weight:600}
 @keyframes qrpop{from{opacity:0;transform:scale(.85) translateY(10px)}}
 button.btn:not(.p){color:var(--fg)}
+
+/* === light theme: more glass === */
+:root[data-theme="light"]{--bg:#e8ebf7;--glass:rgba(255,255,255,.4);--muted:#4b5166;--shadow:0 18px 50px rgba(80,60,170,.2)}
+:root[data-theme="light"] .blob{opacity:.8}
+:root[data-theme="light"] .b3{opacity:.6}
+:root[data-theme="light"] .win,:root[data-theme="light"] .tech,:root[data-theme="light"] nav,:root[data-theme="light"] .btn:not(.p){background:linear-gradient(135deg,rgba(255,255,255,.68),rgba(255,255,255,.26));border-color:rgba(255,255,255,.85);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.35)}
+:root[data-theme="light"] .btn:not(.p){box-shadow:0 6px 18px rgba(80,60,170,.14),inset 0 1px 0 rgba(255,255,255,.95)}
+:root[data-theme="light"] .win::before,:root[data-theme="light"] .tech::before{background:radial-gradient(300px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.75),transparent 60%)}
+@media (prefers-color-scheme: light){
+:root:not([data-theme="dark"]){--bg:#e8ebf7;--glass:rgba(255,255,255,.4);--muted:#4b5166;--shadow:0 18px 50px rgba(80,60,170,.2)}
+:root:not([data-theme="dark"]) .blob{opacity:.8}
+:root:not([data-theme="dark"]) .b3{opacity:.6}
+:root:not([data-theme="dark"]) .win,:root:not([data-theme="dark"]) .tech,:root:not([data-theme="dark"]) nav,:root:not([data-theme="dark"]) .btn:not(.p){background:linear-gradient(135deg,rgba(255,255,255,.68),rgba(255,255,255,.26));border-color:rgba(255,255,255,.85);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.35)}
+:root:not([data-theme="dark"]) .btn:not(.p){box-shadow:0 6px 18px rgba(80,60,170,.14),inset 0 1px 0 rgba(255,255,255,.95)}
+:root:not([data-theme="dark"]) .win::before,:root:not([data-theme="dark"]) .tech::before{background:radial-gradient(300px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.75),transparent 60%)}
+}
 </style>
 </head>
 <body>
