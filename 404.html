@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — verifactor</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%230a0a0a'/%3E%3Cpath fill='%23ff5f1f' d='M1 2h2v1H1zM5 2h2v1H5zM2 3h1v2H2zM5 3h1v2H5zM3 5h2v1H3z'/%3E%3C/svg%3E">
+<script>
+(() => {
+  const r = document.documentElement; let t, l;
+  try { t = localStorage.getItem("vf-theme"); l = localStorage.getItem("vf-lang"); } catch (e) {}
+  r.dataset.theme = t || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  r.lang = l || ((navigator.language || "ru").toLowerCase().startsWith("ru") ? "ru" : "en");
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="dark"]{--bg:#0a0a0a;--fg:#ecebe6;--dim:#8b8a85;--line:rgba(255,255,255,.08);--acc:#ff5f1f}
+[data-theme="light"]{--bg:#f1efe9;--fg:#121211;--dim:#6e6d68;--line:rgba(0,0,0,.1);--acc:#f0541a}
+*{margin:0;padding:0;box-sizing:border-box}
+body{min-height:100svh;display:flex;flex-direction:column;justify-content:space-between;padding:24px clamp(18px,4vw,56px);
+  background:var(--bg);color:var(--fg);font-family:"Inter Tight",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.top,.bot{display:flex;justify-content:space-between;gap:20px}
+.bot{border-top:1px solid var(--line);padding-top:14px}
+h1{font-size:min(38vw,560px);font-weight:500;letter-spacing:-.08em;line-height:.8;margin-left:-.04em}
+h1 span{color:var(--acc)}
+.msg{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;flex-wrap:wrap;margin:24px 0 40px}
+.msg p{font-size:clamp(20px,2.4vw,34px);font-weight:300;letter-spacing:-.02em;max-width:22ch}
+a.home{display:inline-flex;gap:10px;align-items:center;padding:14px 20px;background:var(--acc);color:#0a0a0a;text-decoration:none;
+  font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;transition:transform .5s cubic-bezier(.16,1,.3,1)}
+a.home:hover{transform:translateX(6px)}
+a:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+#path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+canvas{image-rendering:pixelated;width:76px;height:64px}
+</style>
+</head>
+<body>
+<div class="top mono"><a class="mono" href="/" style="text-decoration:none">■ verifactor</a><span id="path"></span></div>
+<main>
+  <h1>404<span>.</span></h1>
+  <div class="msg">
+    <p id="txt">bit обнюхал всё, но такой страницы тут нет.</p>
+    <div style="display:flex;align-items:flex-end;gap:24px">
+      <canvas id="bit" width="19" height="16" aria-hidden="true"></canvas>
+      <a class="home" href="/" id="home">← На главную</a>
+    </div>
+  </div>
+</main>
+<div class="bot mono"><span>© 2026 verifactor</span><span>newince.sbs</span></div>
+<script>
+(() => {
+  const en = document.documentElement.lang === "en";
+  if (en) { document.getElementById("txt").textContent = "bit sniffed everywhere, but this page doesn't exist."; document.getElementById("home").textContent = "← Back home"; }
+  document.getElementById("path").textContent = location.pathname;
+  // пиксельный bit в стиле маскота Claude Code: озирается, моргает и разводит ручками
+  const g = document.getElementById("bit").getContext("2d");
+  const C = { O: "#d97757", D: "#b0553a", L: "#e6957c", K: "#141413" };
+  const R = (x, y, w, h, c) => { g.fillStyle = C[c]; g.fillRect(x, y, w, h); };
+  let look = 0, blink = false, shrug = false;
+  function draw() {
+    g.clearRect(0, 0, 19, 16);
+    [3, 5, 12, 14].forEach(x => R(x, 12, 1, 4, "O"));
+    R(2, 4, 14, 8, "O"); R(2, 4, 14, 1, "L"); R(2, 11, 14, 1, "D");
+    const ay = shrug ? 2 : 6; R(0, ay, 2, 2, "O"); R(16, ay, 2, 2, "O");
+    [5, 11].forEach(x => blink ? R(x + look, 7, 2, 1, "K") : R(x + look, 6, 2, 2, "K"));
+  }
+  draw();
+  setInterval(() => { blink = true; draw(); setTimeout(() => { blink = false; draw(); }, 140); }, 3200);
+  setInterval(() => { look = [-1, 0, 1][(Math.random() * 3) | 0]; shrug = Math.random() < .35; draw(); }, 1300);
+})();
+</script>
+</body>
+</html>
