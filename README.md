@@ -79,6 +79,6 @@ python -m http.server 8000
 
 **verifactor** · © 2026
 
-*Pydroid 3 · Android · iPhone · PC*
+*Android · iPhone · PC*
 
 </div>
